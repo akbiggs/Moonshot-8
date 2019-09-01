@@ -64,12 +64,10 @@ end
 
 -- class helpers (thanks dan!)
 
-local class = {}
-
-function class.build(superclass)
-  local class = {}
-  class.__index = class
-  class._init = function() end
+function class(superclass)
+  local myclass = {}
+  myclass.__index = myclass
+  myclass._init = function() end
 
   local mt = {}
   mt.__call = function(
@@ -85,12 +83,13 @@ function class.build(superclass)
     mt.__metatable = superclass
   end
 
-  return setmetatable(class, mt)
+  return setmetatable(myclass,
+                      mt)
 end
 
 -- vector
 
-vec = class.build()
+vec = class()
 
 function vec:_init(x, y)
   if type(x) == "table"
@@ -238,7 +237,7 @@ end
 
 -- hitbox
 
-hbox = class.build()
+hbox = class()
 
 function hbox:_init(pos, size)
   self.pos = vec(pos)
@@ -272,7 +271,7 @@ end
 
 -- animation
 
-anim = class.build()
+anim = class()
 
 function anim:_init(
     start_sprid, end_sprid,
@@ -337,7 +336,7 @@ function anim:draw(pos, flip_x)
       pos.y, 1, 1, flip_x)
 end
 
-anim_chain = class.build()
+anim_chain = class()
 
 function anim_chain:_init(
     anims, is_loop)
@@ -439,13 +438,96 @@ function filter_alive(xs)
   end
   return alive 
 end
+
+-- timers
+
+local timer = class()
+
+function timer:_init(
+  life, f1, f2)
+ self.start = life
+ self.life = life
+
+ if f2 != nil
+ then
+  self.on_update = f1
+  self.on_done = f2
+ else
+  self.on_done = f1
+ end
+end
+
+function timer:ratio_complete()
+ return (
+   self.start - self.life
+ ) / self.start
+end
+
+function timer:done()
+ return self == nil or
+   self.life == 0
+end
+
+function timer:tick()
+ local prevlife = self.life
+ self.life = max(0, self.life-1)
+ if self:done() and
+    prevlife > 0 and
+    self.on_done != nil
+ then
+  self.on_done()
+ elseif self.life > 0 and
+        self.on_tick != nil
+ then
+  self.on_tick(
+    self:ratio_complete())
+ end
+end
+
+
 -->8
+-- player
+
+local player = class()
+
+function player:_init(pos)
+ self.pos = vec(pos)
+ self.vel = vec()
+end
+
+function player:update(state)
+end
+
+function player:draw(state)
+end
+-->8
+-- game
+
+local state = class()
+
+function state:addtimer(...)
+ self.timers = self.timers or {}
+ add(self.timers, timer(...))
+end
+
+function state:ticktimers()
+ for t in all(self.timers)
+ do
+  t:tick()
+ end
+end
+
+local s = state()
+
+function _init()
+end
+
 function _update60()
+ s:ticktimers()
 end
 
 function _draw()
-  cls()
-  print("hello")
+ cls()
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
