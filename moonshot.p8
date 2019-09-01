@@ -277,7 +277,10 @@ function anim:_init(
     start_sprid, end_sprid,
     is_loop, duration)
   duration = duration or 1
- 
+  is_loop = ternary(
+    is_loop != nil,
+    is_loop, true)
+
   self.start_sprid = start_sprid
   self.end_sprid = end_sprid
   self.is_loop = is_loop
@@ -379,13 +382,14 @@ function anim_chain:update()
   then
     -- next anim in chain
     self.current += 1
-
     self:anim():reset()
   elseif self.is_loop
   then
+    -- loop chain
     self.current = 1
     self:anim():reset()
   else
+    -- no loop
     self.done = true
   end
 end
@@ -468,7 +472,7 @@ function timer:done()
    self.life == 0
 end
 
-function timer:tick()
+function timer:update()
  local prevlife = self.life
  self.life = max(0, self.life-1)
  if self:done() and
@@ -477,62 +481,202 @@ function timer:tick()
  then
   self.on_done()
  elseif self.life > 0 and
-        self.on_tick != nil
+        self.on_update != nil
  then
-  self.on_tick(
+  self.on_update(
     self:ratio_complete())
  end
 end
 
+-- world state
 
+local state = class()
+
+function state:_init()
+ self._groups = {}
+end
+
+function state:_group(group)
+ if not self._groups[group]
+ then
+  self._groups[group] = {}
+ end
+
+ return self._groups[group]
+end
+
+function state:add(group, x)
+ add(self:_group(group), x)
+ return x
+end
+
+function state:addtimer(...)
+ return self:add("timers",
+                 timer(...))
+end
+
+function state:updateall(group)
+ local xs = self:_group(group)
+ for x in all(xs)
+ do
+  x:update(self)
+ end
+ 
+ self._groups[group] =
+   filter_alive(xs)
+end
+
+function state:drawall(group)
+ for x in all(self:_group(group))
+ do
+  x:draw()
+ end
+end
 -->8
+-- bullet
+
+local bullet = class()
+
+function bullet:_init(
+  anim, pos, vel, props)
+ self.anim = anim
+ self.pos = vec(pos)
+ self.vel = vec(vel)
+ 
+ props = props or {}
+ self.life = props.life or 200
+ self.is_enemy =
+   props.is_enemy or false
+end
+
+function bullet:update()
+ self.life = max(0,self.life-1)
+ self.pos += self.vel
+end
+
+function bullet:draw()
+ self.anim:draw(self.pos,
+                self.vel.x >= 0)
+end
+
 -- player
 
 local player = class()
 
+local idle = 0
+local walk = 1
+
 function player:_init(pos)
  self.pos = vec(pos)
  self.vel = vec()
+ self.size = vec(5, 6)
+ self.idle_anim = anim_single(1)
+ self.walk_anim = anim_single(1)
+ self.anim = self.idle_anim
+ self.walking = false
+ self.jumping = true
+ self.left = false
 end
 
-function player:update(state)
+function player:update(s)
+
+ local prevwalking =
+   self.walking
+ local speed = 1 
+ self.vel.x = 0
+ if btn(⬅️) then
+  self.left = true
+  self.walking = true
+  self.vel.x = -speed
+ elseif btn(➡️) then
+  self.left = false
+  self.walking = true
+  self.vel.x = speed
+ else
+  self.walking = false
+ end
+ 
+ if not self.jumping and
+    btnjp(🅾️)
+ then
+  self.jumping = true
+  self.vel.y = -1.5
+ end
+ 
+ if timer.done(self.tfire) and
+    btn(❎)
+ then
+  local offset = ternary(
+    self.left,
+    vec(-4, 0), vec(4, 0))
+  local vel = ternary(
+    self.left,
+    vec(-2, 0), vec(2, 0))
+  s:add("bullets",
+    bullet(
+      anim_single(4),
+      self.pos + offset,
+      vel))
+  self.tfire = s:addtimer(10)      
+ end
+ 
+ if self.walking then
+  self.anim = self.walk_anim
+ else
+  self.anim = self.idle_anim
+ end
+ 
+ if self.walking != prevwalking
+ then
+  self.anim:reset()
+ end
+ 
+ local gravity = vec(0, 0.1)
+ self.vel += gravity
+ self.pos += self.vel
+ if self.pos.y > 104
+ then
+  self.jumping = false
+  self.pos.y = 104
+ end
+ 
+ self.anim:update()
 end
 
-function player:draw(state)
+function player:draw()
+ self.anim:draw(self.pos,
+                self.left)
 end
 -->8
 -- game
 
-local state = class()
-
-function state:addtimer(...)
- self.timers = self.timers or {}
- add(self.timers, timer(...))
-end
-
-function state:ticktimers()
- for t in all(self.timers)
- do
-  t:tick()
- end
-end
-
 local s = state()
 
 function _init()
+ s.player = player(vec(20, 20))
 end
 
 function _update60()
- s:ticktimers()
+ s.player:update(s)
+
+ s:updateall("bullets")
+ s:updateall("timers")
 end
 
 function _draw()
  cls()
+ 
+ rectfill(0, 0, 128, 110, 1)
+
+ s.player:draw()
+ s:drawall("bullets")
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000077777700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700070000700700070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000070808707777777077777770000888000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000070000707000007070000070088888800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700077777707070077070700770000888000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000070007007000007070000070000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000007777777077777770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
