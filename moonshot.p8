@@ -224,6 +224,16 @@ function vec:push_towards(t, d)
                    dvec.y))
 end
 
+function vec:lerp(b, t)
+ return vec(lerp(self.x, b.x, t),
+            lerp(self.y, b.y, t))
+end
+
+function vec:map(fn)
+ return vec(fn(self.x),
+            fn(self.y))
+end
+
 -- table helpers
 
 function addall(xs, ys)
@@ -541,6 +551,67 @@ function state:drawall(group)
   x:draw()
  end
 end
+
+-- particle
+
+local particle = class()
+
+function particle:_init(
+  pos, vel, props)
+ self.pos = vec(pos)
+ self.vel = ternary(
+   vel != nil,
+   vec(vel),
+   vec(-1 + rnd(2),
+       -1 + rnd(2)):normalized())
+ self.accel = props.accel or vec()
+ 
+ self.size = props.size or vec(1,1)
+ self.startsize = vec(self.size)
+ self.decayfn = props.decayfn
+ 
+ self.life = props.life or 80 + rnd(40)
+ self.startlife = self.life
+ self.color = props.color or 7
+ self.anim = props.anim
+ 
+ self.drawfn = props.drawfn
+end
+
+function particle:update(s)
+ self.life = max(0, self.life-1)
+ self.vel += self.accel
+ self.pos += self.vel
+
+ if self.decayfn
+ then
+  self.size = self.decayfn(
+    vec(),
+    self.startsize,
+    self.life / self.startlife)
+  self.size = self.size:map(ceil)
+ end
+
+ if self.anim
+ then
+  self.anim:update()
+ end
+end
+
+function particle:draw()
+ if self.drawfn
+ then
+  self.drawfn(self)
+ elseif self.anim
+ then
+  self.anim:draw(self.pos)
+ else
+  rect(self.pos.x, self.pos.y,
+       self.pos.x + self.size.x - 1,
+       self.pos.y + self.size.y - 1,
+       self.color)
+ end
+end
 -->8
 -- bullet
 
@@ -566,48 +637,6 @@ end
 function bullet:draw()
  self.anim:draw(self.pos,
                 self.vel.x >= 0)
-end
-
--- particle
-
-local particle = class()
-
-function particle:_init(
-  pos, vel, props)
- self.pos = vec(pos)
- self.vel = ternary(
-   vel != nil,
-   vec(vel),
-   vec(-1 + rnd(2),
-       -1 + rnd(2)):normalized())
- self.size = props.size or vec(1,1)
- self.life = props.life or 80 + rnd(40)
- self.accel = props.accel or vec()
- self.color = props.color or 7
- self.anim = props.anim
-end
-
-function particle:update(s)
- self.life = max(0, self.life-1)
- self.vel += self.accel
- self.pos += self.vel
- 
- if self.anim != nil
- then
-  self.anim:update()
- end
-end
-
-function particle:draw()
- if self.anim != nil
- then
-  self.anim:draw()
- else
-  rect(self.pos.x, self.pos.y,
-       self.pos.x + self.size.x - 1,
-       self.pos.y + self.size.y - 1,
-       self.color)
- end
 end
 
 -- floater
@@ -676,7 +705,11 @@ function floater:update(s)
       self.pos + vec(4, 4) +
         (-self.accel * vec(5, 5)),
       -self.accel*0.4+offset*0.2,
-      {life=40+rnd(30)}))
+      {
+       life=40+rnd(30),
+       decayfn=vec.lerp,
+       size=vec(2, 2),
+      }))
   self.tdust = s:addtimer(
     1 + rnd(2))
  end
