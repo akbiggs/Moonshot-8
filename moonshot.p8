@@ -830,14 +830,14 @@ function reset_stage()
 
  local savedata = load_game()
  
+ -- groups
  s.bullets = "bullets"
  s.enemies = "enemies"
  s.timers = "timers"
  s.particles = "particles"
  
  s.player = player(
-   vec(20, 20),
-   savedata.lvl,
+   vec(20, 20), savedata.lvl,
    savedata.xp)
 
  s:add(
@@ -870,7 +870,7 @@ function _draw()
  s:drawall(s.particles)
  
  rectfill(0, 107, 128, 107, 7)
- rectfill(0, 108, 128, 108, 0)
+ rectfill(0, 108, 128, 128, 0)
 
  local life_ratio =
    s.player.life /
